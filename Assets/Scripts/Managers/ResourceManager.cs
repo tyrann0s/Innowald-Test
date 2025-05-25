@@ -14,8 +14,7 @@ namespace Managers
     
         private List<GameObject> pool;
 
-        [SerializeField] private float resourceSpawnDelay;
-        public float ResourceSpawnDelay => resourceSpawnDelay;
+        public float ResourceSpawnDelay { get; set; } = 5f;
 
         [SerializeField] private float spawnRadius;
         [SerializeField] private float minDistanceFromOthers = 2f;
@@ -66,7 +65,7 @@ namespace Managers
                     resource.transform.position = new Vector3(spawnPoint.x, spawnPoint.y, spawnPoint.z);
                 }
         
-                yield return new WaitForSeconds(resourceSpawnDelay);
+                yield return new WaitForSeconds(ResourceSpawnDelay);
             }
         }
 

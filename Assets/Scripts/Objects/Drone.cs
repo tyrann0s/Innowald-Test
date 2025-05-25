@@ -1,26 +1,46 @@
 using System;
 using System.Collections;
+using Managers;
+using TMPro;
 using UnityEngine;
 
 public class Drone : MonoBehaviour
 {
-    [SerializeField] private float moveSpeed = 5f;
+    public float MoveSpeed { get; set; }
     [SerializeField] private float detectionRadius = 10f;
     [SerializeField] private float avoidanceRadius = 2f;
     [SerializeField] private LayerMask obstacleLayer;
     [SerializeField] private float harvestTime = 2f;
     
+    [SerializeField] private TextMeshPro stateText;
+    private LineRenderer lineRenderer;
+    
     private GameObject targetResource;
     private DroneManager droneManager;
     private Vector3 currentDirection;
     
-    public void SetUpDrone(DroneManager droneManager)
+    private bool haveResource;
+
+    private void Awake()
     {
-        this.droneManager = droneManager;
-        GetComponentInChildren<MeshRenderer>().material = droneManager.ParentBase.TeamMaterial;
+        lineRenderer = GetComponent<LineRenderer>();
     }
 
+    public void SetUpDrone(DroneManager droneManager, float speed, bool traceLine)
+    {
+        MoveSpeed = speed;
+        this.droneManager = droneManager;
+        GetComponentInChildren<MeshRenderer>().material = droneManager.ParentBase.TeamMaterial;
+        lineRenderer.enabled = traceLine;
+        SetText();
+    }
+    
     private void Update()
+    {
+        stateText.transform.rotation = Camera.main.transform.rotation;
+    }
+
+    private void FixedUpdate()
     {
         if (targetResource == null)
         {
@@ -31,9 +51,11 @@ public class Drone : MonoBehaviour
         {
             Vector3 targetDirection = (targetResource.transform.position - transform.position).normalized;
             currentDirection = AvoidObstacles(targetDirection);
-            transform.position += currentDirection * (moveSpeed * Time.deltaTime);
-            transform.rotation = Quaternion.LookRotation(currentDirection);
-            transform.forward = currentDirection;
+            transform.position += currentDirection * (MoveSpeed * Time.deltaTime);
+            transform.rotation = Quaternion.Lerp(transform.rotation, Quaternion.LookRotation(currentDirection), MoveSpeed * Time.deltaTime);
+            
+            lineRenderer.SetPosition(0, transform.position);
+            lineRenderer.SetPosition(1, targetResource.transform.position);
         }
     }
 
@@ -65,15 +87,16 @@ public class Drone : MonoBehaviour
         {
             if (collider.CompareTag("Resource"))
             {
+                Resource resource = collider.GetComponent<Resource>();
                 float distance = Vector3.Distance(transform.position, collider.transform.position);
-                if (distance < nearestDistance)
+                if (distance < nearestDistance && !resource.IsOccupied)
                 {
                     nearestDistance = distance;
                     nearest = collider.gameObject;
                 }
             }
         }
-        
+        if (nearest != null) nearest.GetComponent<Resource>().IsOccupied = true;
         return nearest;
     }
 
@@ -81,26 +104,42 @@ public class Drone : MonoBehaviour
     {
         if (other.CompareTag("Resource"))
         {
-            StartCoroutine(HarvestResource());
+            if (!haveResource) StartCoroutine(HarvestResource());
         }
         
         if (other.CompareTag("Dock"))
         {
-            StartCoroutine(UnloadResource());
+            if (haveResource) StartCoroutine(UnloadResource());
         }
     }
 
     private IEnumerator HarvestResource()
     {
+        haveResource = true;
         yield return new WaitForSeconds(harvestTime);
         droneManager.ResManager.ReturnToPool(targetResource);
         targetResource = droneManager.ParentBase.DockPosition.gameObject;
+        SetText();
     }
     
     private IEnumerator UnloadResource()
     {
+        haveResource = false;
         yield return new WaitForSeconds(harvestTime);
+        
         droneManager.ParentBase.AddResource();
         targetResource = null;
+        SetText();
+    }
+
+    private void SetText()
+    {
+        if (haveResource) stateText.text = "RETURNING TO DOCK";
+        else stateText.text = "HARVESTING";
+    }
+
+    public void ToggleTraceLine(bool value)
+    {
+        lineRenderer.enabled = value;
     }
 }
